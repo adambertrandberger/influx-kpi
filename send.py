@@ -2,6 +2,7 @@ from influxdb import InfluxDBClient
 import math
 import time
 import sys
+import csv
 
 def has_database(client, name):
     for item in client.get_list_database():
@@ -16,9 +17,13 @@ def setup_databases(client):
     if not has_database(client, 'signals'):
         client.create_database('signals')
 
+def sine_wave_good(sample_count, phase=0):
+    ''' Generates a single period of a sine wave with the given resolution '''
+    return list(map(lambda x: math.sin(((x/(sample_count-1))*math.pi*2) + phase), range(0, sample_count)))
+
 def sine_wave(sample_count, phase=0):
     ''' Generates a single period of a sine wave with the given resolution '''
-    return list(map(lambda x: math.sin((x/math.pi) + phase), range(0, sample_count)))
+    return list(map(lambda x: math.sin((x/math.pi)*math.pi) + phase, range(0, sample_count)))
 
 def capture_one_period(name, sample_count):
     return Capture(name, sample_count) \
@@ -39,7 +44,7 @@ class Capture:
         self.signals = {}
         self.signalConfig = {}
         self.start_time = start_time
-        self.durationNs = durationMs * 10000 # how many milliseconds in duration is each capture
+        self.durationNs = durationMs * 10000 # how many nanoseconds in duration is each capture
         self.sample_count = sample_count # how many samples are in each capture
 
     def signal(self, name, phase=0):
@@ -56,8 +61,11 @@ class Capture:
             end_time = self.start_time + self.durationNs
             self.time = [x for x in range(self.start_time, end_time)]
             self.start_time = end_time
-            
-            yield self.to_influx()
+
+            row = self.to_influx()
+
+
+            yield row
 
     def to_influx(self):
         batches = []
@@ -76,6 +84,7 @@ class Capture:
                 'time': current_time
             })
 
+            
         signal_names = list(self.signals.keys())
         
         influx = []
@@ -99,8 +108,6 @@ def write_measurement(name):
         client.write_points(line_protocols, database='signals', batch_size=SAMPLE_COUNT, protocol='line')
         print(f'Sent one {SAMPLE_COUNT} sized batch to InfluxDB')
         
-
-    
 if __name__ == '__main__':
     if len(sys.argv) < 2:
         print('Requires a measurement name')

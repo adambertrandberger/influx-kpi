@@ -64,7 +64,6 @@ class Capture:
 
             row = self.to_influx()
 
-
             yield row
 
     def to_influx(self):
